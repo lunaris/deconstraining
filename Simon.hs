@@ -15,6 +15,8 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
+{-# OPTIONS_GHC -fno-warn-missing-methods #-}
+
 module Simon where
 
 data Exp1 c a where
@@ -34,6 +36,10 @@ evaluate1 (EqE1 e1 e2)
 
 class Cuda a where
   toCuda :: a -> String
+
+instance Cuda Bool where
+  toCuda x
+    = "(Bool " ++ show x ++ ")"
 
 instance Cuda Char where
   toCuda x
@@ -60,8 +66,22 @@ instance (c a, d a) => Both c d a
 
 data Exp2 c a where
   ValueE2 :: c a => a -> Exp2 c a
-  CondE2  :: Exp2 c Bool -> Exp2 c a -> Exp2 c a -> Exp2 c a
-  EqE2    :: Eq a => Exp2 c a -> Exp2 c a -> Exp2 c Bool
+
+  CondE2  :: (c a, c Bool)
+          => Exp2 c Bool -> Exp2 c a -> Exp2 c a -> Exp2 c a
+
+  EqE2    :: (Eq a, c a, c Bool)
+          => Exp2 c a -> Exp2 c a -> Exp2 c Bool
+
+  AddE2   :: (Num a, c a)
+          => Exp2 c a -> Exp2 c a -> Exp2 c a
+
+instance (c a, Num a) => Num (Exp2 c a) where
+  (+)
+    = AddE2
+
+  fromInteger
+    = ValueE2 . fromInteger
 
 class Every a
 
@@ -77,6 +97,9 @@ evaluate2 (CondE2 p t f)
 evaluate2 (EqE2 e1 e2)
   = evaluate2 e1 == evaluate2 e2
 
+evaluate2 (AddE2 e1 e2)
+  = evaluate2 e1 + evaluate2 e2
+
 exp2ToCuda :: Exp2 Cuda a -> String
 exp2ToCuda (ValueE2 x)
   = toCuda x
@@ -87,6 +110,9 @@ exp2ToCuda (CondE2 p t f)
 
 exp2ToCuda (EqE2 e1 e2)
   = "(Eq " ++ exp2ToCuda e1 ++ " " ++ exp2ToCuda e2 ++ ")"
+
+exp2ToCuda (AddE2 e1 e2)
+  = "(Add " ++ exp2ToCuda e1 ++ " " ++ exp2ToCuda e2 ++ ")"
 
 data Dict c a where
   Dict :: c a => Dict c a
@@ -101,6 +127,9 @@ pickLeft (CondE2 p t f)
 pickLeft (EqE2 e1 e2)
   = EqE2 (pickLeft e1) (pickLeft e2)
 
+pickLeft (AddE2 e1 e2)
+  = AddE2 (pickLeft e1) (pickLeft e2)
+
 pickRight :: Exp2 (Both c d) a -> Exp2 d a
 pickRight (ValueE2 x)
   = ValueE2 x
@@ -110,6 +139,9 @@ pickRight (CondE2 p t f)
 
 pickRight (EqE2 e1 e2)
   = EqE2 (pickRight e1) (pickRight e2)
+
+pickRight (AddE2 e1 e2)
+  = AddE2 (pickRight e1) (pickRight e2)
 
 f e
   = (evaluate2 (pickLeft e), exp2ToCuda (pickRight e))
