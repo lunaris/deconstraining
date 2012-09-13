@@ -18,14 +18,11 @@
 module Simon where
 
 data Exp c a where
-  ValueE  :: c a => a -> Exp (c a) a
-  CondE   :: Exp c Bool -> Exp d a -> Exp e a -> Exp (c,d,e) a
+  ValueE  :: c => a -> Exp c a
+  CondE   :: Exp c Bool -> Exp c a -> Exp c a -> Exp c a
   EqE     :: Eq a => Exp c a -> Exp c a -> Exp c Bool
 
-class Any a
-instance Any a
-
-evaluate :: Exp c a -> a
+evaluate :: Exp () a -> a
 evaluate (ValueE x)
   = x
 
@@ -38,27 +35,21 @@ evaluate (EqE e1 e2)
 class Cuda a where
   toCuda :: a -> String
 
+instance Cuda Char where
+  toCuda x
+    = "(Char " ++ show x ++ ")"
+
 instance Cuda Int where
   toCuda x
     = "(Int " ++ show x ++ ")"
 
+expToCuda :: Exp (Cuda a) a -> String
 expToCuda (ValueE x)
   = toCuda x
 
-expToCuda (CondE b l r)
-  = expToCuda b ++ expToCuda l ++ expToCuda r
-
-{-
-data Trap c a where
-  Trap :: c a => Trap c a
-
-urk :: (Cuda a ~ c a) => (Trap c a -> b) -> (Trap Cuda a -> b)
-urk f Trap
-  = f Trap
-
--}
-{-
-f :: Exp (Any a, Cuda a) a -> (a, String)
-f e
-  = (evaluate e, expToCuda e)
--}
+-- expToCuda (CondE p t f)
+--   = "(Cond " ++ expToCuda p ++ " " ++ expToCuda t ++ " " ++
+--       expToCuda f ++ ")"
+--
+-- expToCuda (EqE e1 e2)
+--   = "(Eq " ++ expToCuda e1 ++ " " ++ expToCuda e2 ++ ")"
